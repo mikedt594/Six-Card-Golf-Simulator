@@ -123,6 +123,18 @@
             <button class="secondary-action" id="solverRandomButton" type="button">Random spot</button>
             <button class="secondary-action primary-action" id="solverRunButton" type="button">Find best move</button>
             <div class="solver-field">
+              <span>Saved spots</span>
+              <select id="solverSavedSpotSelect" aria-label="Choose saved spot">
+                <option value="">No saved spots</option>
+              </select>
+              <div class="solver-save-actions">
+                <button class="secondary-action" id="solverSaveSpotButton" type="button">Save spot</button>
+                <button class="secondary-action" id="solverLoadSpotButton" type="button">Load</button>
+                <button class="secondary-action" id="solverDeleteSpotButton" type="button">Delete</button>
+              </div>
+              <div class="equity-note" id="solverSaveStatus">Saved spots stay in this browser.</div>
+            </div>
+            <div class="solver-field">
               <span>GTO tree</span>
               <label class="lab-rounds">
                 Worlds

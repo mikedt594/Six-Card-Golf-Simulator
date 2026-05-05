@@ -100,6 +100,11 @@ const solverClearCardButtonEl = document.querySelector("#solverClearCardButton")
 const solverClearButtonEl = document.querySelector("#solverClearButton");
 const solverRandomButtonEl = document.querySelector("#solverRandomButton");
 const solverRunButtonEl = document.querySelector("#solverRunButton");
+const solverSavedSpotSelectEl = document.querySelector("#solverSavedSpotSelect");
+const solverSaveSpotButtonEl = document.querySelector("#solverSaveSpotButton");
+const solverLoadSpotButtonEl = document.querySelector("#solverLoadSpotButton");
+const solverDeleteSpotButtonEl = document.querySelector("#solverDeleteSpotButton");
+const solverSaveStatusEl = document.querySelector("#solverSaveStatus");
 const gtoRunButtonEl = document.querySelector("#gtoRunButton");
 const gtoSamplesEl = document.querySelector("#gtoSamples");
 const gtoDepthEl = document.querySelector("#gtoDepth");
@@ -108,6 +113,7 @@ const solverOutputEl = document.querySelector("#solverOutput");
 const cpuLabRoundsEl = document.querySelector("#cpuLabRounds");
 const cpuLabRunButtonEl = document.querySelector("#cpuLabRunButton");
 const cpuLabOutputEl = document.querySelector("#cpuLabOutput");
+const solverSpotStorageKey = "six-card-golf-saved-spots-v1";
 
 function buildDeck() {
   const deck = [];
@@ -128,6 +134,16 @@ function buildDeck() {
 
 function cardName(card) {
   return card ? `${card.label}${card.suit}` : "";
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  }[character]));
 }
 
 function shuffle(cards) {
@@ -1522,6 +1538,7 @@ function setSolverPlayerCount(count) {
 function renderSolver() {
   renderSolverControls();
   renderSolverPlayers();
+  renderSavedSolverSpots();
 }
 
 function renderSolverControls() {
@@ -2069,6 +2086,112 @@ function clearSolverSpot() {
   renderSolver();
 }
 
+function solverSpotSnapshot() {
+  return {
+    version: 1,
+    playerCount: solverPlayerCount,
+    currentPlayer: solverCurrentPlayer,
+    hands: solverHands.map((hand) => hand.map((slot) => ({ code: slot.code || "" }))),
+    discardPile: [...solverDiscardPile],
+    savedAt: new Date().toISOString(),
+  };
+}
+
+function readSavedSolverSpots() {
+  try {
+    const spots = JSON.parse(localStorage.getItem(solverSpotStorageKey) || "[]");
+    return Array.isArray(spots) ? spots : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeSavedSolverSpots(spots) {
+  localStorage.setItem(solverSpotStorageKey, JSON.stringify(spots));
+}
+
+function normaliseSolverSpotName(name) {
+  return name.trim().replace(/\s+/g, " ").slice(0, 60);
+}
+
+function renderSavedSolverSpots(selectedId = solverSavedSpotSelectEl.value) {
+  const spots = readSavedSolverSpots();
+  if (spots.length === 0) {
+    solverSavedSpotSelectEl.innerHTML = `<option value="">No saved spots</option>`;
+    solverLoadSpotButtonEl.disabled = true;
+    solverDeleteSpotButtonEl.disabled = true;
+    return;
+  }
+
+  solverSavedSpotSelectEl.innerHTML = spots
+    .map((spot) => `<option value="${escapeHtml(spot.id)}" ${spot.id === selectedId ? "selected" : ""}>${escapeHtml(spot.name)}</option>`)
+    .join("");
+  solverLoadSpotButtonEl.disabled = false;
+  solverDeleteSpotButtonEl.disabled = false;
+}
+
+function saveSolverSpot() {
+  const defaultName = `Spot ${new Date().toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`;
+  const name = normaliseSolverSpotName(prompt("Name this spot", defaultName) || "");
+  if (!name) return;
+
+  const spots = readSavedSolverSpots();
+  const existingIndex = spots.findIndex((spot) => spot.name.toLowerCase() === name.toLowerCase());
+  const savedSpot = {
+    id: existingIndex >= 0 ? spots[existingIndex].id : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    name,
+    ...solverSpotSnapshot(),
+  };
+
+  if (existingIndex >= 0) {
+    spots[existingIndex] = savedSpot;
+  } else {
+    spots.unshift(savedSpot);
+  }
+
+  writeSavedSolverSpots(spots.slice(0, 30));
+  solverSaveStatusEl.textContent = `Saved "${name}".`;
+  renderSavedSolverSpots(savedSpot.id);
+}
+
+function applySolverSpot(spot) {
+  solverPlayerCount = Math.min(4, Math.max(2, Number(spot.playerCount) || 2));
+  solverCurrentPlayer = Math.min(solverPlayerCount - 1, Math.max(0, Number(spot.currentPlayer) || 0));
+  solverHands = createEmptySolverHands();
+  for (let playerIndex = 0; playerIndex < Math.min(4, spot.hands?.length || 0); playerIndex += 1) {
+    for (let slotIndex = 0; slotIndex < Math.min(6, spot.hands[playerIndex]?.length || 0); slotIndex += 1) {
+      solverHands[playerIndex][slotIndex] = { code: spot.hands[playerIndex][slotIndex]?.code || "" };
+    }
+  }
+  solverDiscardPile = Array.isArray(spot.discardPile) ? [...spot.discardPile] : [];
+  solverOutputEl.textContent = "Saved spot loaded. Run the solver when ready.";
+  solverSaveStatusEl.textContent = `Loaded "${spot.name}".`;
+  renderSolver();
+  renderSavedSolverSpots(spot.id);
+}
+
+function loadSolverSpot() {
+  const id = solverSavedSpotSelectEl.value;
+  const spot = readSavedSolverSpots().find((candidate) => candidate.id === id);
+  if (!spot) return;
+  applySolverSpot(spot);
+}
+
+function deleteSolverSpot() {
+  const id = solverSavedSpotSelectEl.value;
+  const spots = readSavedSolverSpots();
+  const spot = spots.find((candidate) => candidate.id === id);
+  if (!spot || !confirm(`Delete "${spot.name}"?`)) return;
+  writeSavedSolverSpots(spots.filter((candidate) => candidate.id !== id));
+  solverSaveStatusEl.textContent = `Deleted "${spot.name}".`;
+  renderSavedSolverSpots();
+}
+
 function randomSolverSpot() {
   const deck = shuffle(solverDeckOptions().filter((option) => option.code).map((option) => option.code));
   solverHands = createEmptySolverHands();
@@ -2533,6 +2656,9 @@ solverPlayersEl.addEventListener("click", (event) => {
   openSolverCardPicker(Number(button.dataset.player), Number(button.dataset.slot));
 });
 solverRunButtonEl.addEventListener("click", runSolver);
+solverSaveSpotButtonEl.addEventListener("click", saveSolverSpot);
+solverLoadSpotButtonEl.addEventListener("click", loadSolverSpot);
+solverDeleteSpotButtonEl.addEventListener("click", deleteSolverSpot);
 gtoRunButtonEl.addEventListener("click", runGtoTreeSolve);
 solverClearButtonEl.addEventListener("click", clearSolverSpot);
 solverRandomButtonEl.addEventListener("click", randomSolverSpot);

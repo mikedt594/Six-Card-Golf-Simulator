@@ -184,6 +184,12 @@ button {
   padding: 0 8px;
 }
 
+.solver-save-actions {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+}
+
 .lab-rounds {
   display: grid;
   gap: 8px;
