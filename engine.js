@@ -357,6 +357,20 @@ function installGolfEngine(root) {
     return 0;
   }
 
+  function knownPremiumTakeBonus(state, action, incoming) {
+    if (action.type !== "take-discard-place" || !incoming) return 0;
+    const slot = state.players[state.currentPlayer]?.cards[action.index];
+    let bonus = 0;
+    if (incoming.label === "2") bonus = 2.6;
+    else if (incoming.label === "K") bonus = 2.2;
+    else if (incoming.label === "A") bonus = 0.8;
+    else if (incoming.value <= 3) bonus = 0.5;
+
+    if (!bonus) return 0;
+    if (!slot?.faceUp) bonus += 0.6;
+    return bonus;
+  }
+
   function discardedCardForAction(state, action) {
     if (!["take-discard-place", "replace"].includes(action.type)) return null;
     const slot = state.players[state.currentPlayer]?.cards[action.index];
@@ -441,6 +455,7 @@ function installGolfEngine(root) {
     const slot = player.cards[action.index];
     const scoredAction = forcedCard ? { ...action, type: "replace", card: forcedCard } : action;
     let score = scorePlayerWithUnknowns(state, state.currentPlayer) + projectedColumnDelta(state, scoredAction, forcedCard);
+    score -= knownPremiumTakeBonus(state, action, incoming);
     if (slot.faceUp) {
       score += premiumProtectionPenalty(slot.card, incoming);
       score += giveawayPenalty(slot.card) * 0.35;
@@ -452,7 +467,8 @@ function installGolfEngine(root) {
   }
 
   function mechanicsEvaluation(state, action) {
-    let score = scorePlayerWithUnknowns(state, state.currentPlayer);
+    const baseScore = scorePlayerWithUnknowns(state, state.currentPlayer);
+    let score = baseScore;
     if (action.type === "draw-stock") {
       score = drawMechanicsScore(state);
     } else if (action.type === "pass-drawn") {
@@ -463,8 +479,16 @@ function installGolfEngine(root) {
     const pressure = closeoutPressure(state, action);
     const threat = opponentThreatForDiscard(state, discardedCardForAction(state, action));
     const makesOwnCancel = createsKnownColumnCancel(state, action);
-    const threatCap = makesOwnCancel ? 2.5 : 4.5;
-    const threatPenalty = Math.min(threat.value * 0.3, threatCap);
+    const incoming = cardForAction(state, action);
+    const ownGain = Math.max(baseScore - score, 0);
+    let threatRate = 0.12;
+    let threatCap = makesOwnCancel ? 1.25 : 2.25;
+    if (action.type === "take-discard-place" && incoming && ["2", "K"].includes(incoming.label)) {
+      threatRate = 0.05;
+      threatCap = 0.75;
+    }
+    if (ownGain > 0) threatCap = Math.min(threatCap, Math.max(0.4, ownGain * 0.25));
+    const threatPenalty = Math.min(threat.value * threatRate, threatCap);
     return {
       mechanicsScore: score + pressure + threatPenalty,
       pressure,
