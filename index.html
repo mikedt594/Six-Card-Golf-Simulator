@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Six Card Golf Simulator</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <section class="main-menu" id="mainMenu" aria-label="Main menu">
+        <div class="menu-content">
+          <p class="eyebrow">Six Card Golf</p>
+          <h1>Simulator</h1>
+          <div class="menu-player-count">
+            <p>New game players</p>
+            <div class="segmented" id="menuPlayerCountControls" aria-label="Choose new game player count">
+              <button type="button" data-count="2">2</button>
+              <button type="button" data-count="3">3</button>
+              <button type="button" data-count="4">4</button>
+            </div>
+          </div>
+          <div class="menu-actions">
+            <button id="startGameButton" type="button">Start new game</button>
+            <button id="solverButton" type="button">Mike's Dream Machine</button>
+            <button id="resumeGameButton" type="button" hidden>Resume game</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="table" id="gameTable" aria-label="Six card golf table" hidden>
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Six Card Golf</p>
+            <h1>Simulator</h1>
+          </div>
+          <div class="hole-board" id="holeBoard" aria-label="Hole counter"></div>
+          <div class="scoreboard" id="scoreboard" aria-label="Scoreboard"></div>
+          <button class="menu-button" id="menuButton" type="button">Menu</button>
+          <button class="icon-button" id="newRoundButton" type="button" title="Start a new round" aria-label="Start a new round">
+            <span aria-hidden="true">↻</span>
+          </button>
+        </header>
+
+        <section class="play-area">
+          <aside class="side-panel">
+            <div class="match-panel">
+              <p>Players</p>
+              <div class="segmented" id="playerCountControls" aria-label="Choose player count">
+                <button type="button" data-count="2">2</button>
+                <button type="button" data-count="3">3</button>
+                <button type="button" data-count="4">4</button>
+              </div>
+              <div class="dealer-info" id="dealerInfo"></div>
+            </div>
+
+            <div class="pile-row" aria-label="Draw piles">
+              <button class="pile stock" id="stockPile" type="button">
+                <span class="pile-count" id="stockCount">0</span>
+                <span class="pile-label">Stock</span>
+              </button>
+              <button class="pile discard" id="discardPile" type="button">
+                <span class="card mini" id="discardCard"></span>
+                <span class="pile-label">Discard</span>
+              </button>
+            </div>
+            <button class="secondary-action" id="openDiscardButton" type="button">Open discard pile</button>
+
+            <div class="drawn-card" id="drawnCardPanel" hidden>
+              <p>Drawn card</p>
+              <div class="card large" id="drawnCard"></div>
+              <button id="throwDrawnButton" type="button">Pass to discard</button>
+            </div>
+
+            <div class="message" id="message" role="status" aria-live="polite"></div>
+            <div class="controls">
+              <button id="nextHoleButton" type="button" hidden>Next hole</button>
+              <button id="hintButton" type="button">Find best move</button>
+              <button id="autoPlayButton" type="button">Auto play CPUs</button>
+            </div>
+            <div class="equity-panel" id="equityPanel">
+              <p>Equity</p>
+              <div id="equityOutput">Start a game, then calculate the current decision.</div>
+            </div>
+          </aside>
+
+          <section class="players" id="players" aria-label="Players"></section>
+        </section>
+      </section>
+
+      <section class="solver-screen" id="solverScreen" hidden>
+        <header class="topbar solver-topbar">
+          <div>
+            <p class="eyebrow">Six Card Golf Solver</p>
+            <h1>Mike's Dream Machine</h1>
+          </div>
+          <button class="menu-button" id="solverMenuButton" type="button">Menu</button>
+        </header>
+
+        <section class="solver-layout">
+          <aside class="solver-panel">
+            <div class="match-panel">
+              <p>Players</p>
+              <div class="segmented" id="solverPlayerCountControls">
+                <button type="button" data-count="2">2</button>
+                <button type="button" data-count="3">3</button>
+                <button type="button" data-count="4">4</button>
+              </div>
+            </div>
+
+            <label class="solver-field" hidden>
+              Current player
+              <select id="solverCurrentPlayer"></select>
+            </label>
+
+            <div class="solver-field">
+              <span>Discard pile</span>
+              <button class="secondary-action" id="solverOpenDiscardButton" type="button">Discard pile</button>
+              <div class="solver-discard-list" id="solverDiscardList"></div>
+            </div>
+
+            <button class="secondary-action" id="solverClearButton" type="button">Clear spot</button>
+            <button class="secondary-action" id="solverRandomButton" type="button">Random spot</button>
+            <button class="secondary-action primary-action" id="solverRunButton" type="button">Find best move</button>
+            <div class="solver-field">
+              <span>GTO tree</span>
+              <label class="lab-rounds">
+                Worlds
+                <select id="gtoSamples">
+                  <option value="250">250</option>
+                  <option value="1000" selected>1,000</option>
+                  <option value="5000">5,000</option>
+                </select>
+              </label>
+              <label class="lab-rounds">
+                Depth
+                <select id="gtoDepth">
+                  <option value="4">4</option>
+                  <option value="6" selected>6</option>
+                  <option value="8">8</option>
+                </select>
+              </label>
+              <button class="secondary-action primary-action" id="gtoRunButton" type="button">GTO tree solve</button>
+            </div>
+
+            <div class="solver-field">
+              <span>CPU Lab</span>
+              <label class="lab-rounds">
+                Rounds
+                <select id="cpuLabRounds">
+                  <option value="250">250</option>
+                  <option value="1000" selected>1,000</option>
+                  <option value="5000">5,000</option>
+                </select>
+              </label>
+              <button class="secondary-action" id="cpuLabRunButton" type="button">Run CPU self-play</button>
+            </div>
+
+            <div class="equity-panel">
+              <p>CPU Lab</p>
+              <div id="cpuLabOutput">Run self-play to compare strategy EV.</div>
+            </div>
+
+            <div class="equity-panel tips-panel">
+              <p>Tips and Tricks</p>
+              <div class="tips-list">
+                <div><strong>Stock is often strong early.</strong><span>You get to see a new card and can pass bad draws, so a merely okay discard is not always worth taking.</span></div>
+                <div><strong>Take discard for clear value.</strong><span>Good discard takes usually lower shown score, make a column pair, or grab a premium low card.</span></div>
+                <div><strong>Column cancels are huge.</strong><span>Matching ranks in a column score zero, so pairing a high card can beat simply lowering one slot.</span></div>
+                <div><strong>2s and Kings are premium.</strong><span>2s score -2 and Kings score 0, so they are usually worth protecting or taking.</span></div>
+                <div><strong>Do not overpay for denial.</strong><span>Blocking an opponent matters, but raising your own score needs a very clear reason.</span></div>
+                <div><strong>Close EVs are not commandments.</strong><span>If options are within a fraction of a point, table context and discard history can decide it.</span></div>
+              </div>
+            </div>
+          </aside>
+
+          <section class="solver-main" aria-label="Solver table and results">
+            <section class="solver-players" id="solverPlayers"></section>
+            <div class="equity-panel solver-results-panel">
+              <p>Solver</p>
+              <div id="solverOutput">Build a spot, then run the solver.</div>
+            </div>
+          </section>
+        </section>
+      </section>
+
+      <dialog class="discard-dialog" id="discardDialog" aria-labelledby="discardDialogTitle">
+        <div class="dialog-header">
+          <h2 id="discardDialogTitle">Discard pile</h2>
+          <button class="icon-button" id="closeDiscardButton" type="button" aria-label="Close discard pile">×</button>
+        </div>
+        <div class="discard-history" id="discardHistory"></div>
+      </dialog>
+
+      <dialog class="solver-discard-dialog" id="solverDiscardDialog" aria-labelledby="solverDiscardDialogTitle">
+        <div class="dialog-header">
+          <h2 id="solverDiscardDialogTitle">Solver discard pile</h2>
+          <button class="icon-button" id="solverCloseDiscardButton" type="button" aria-label="Close solver discard pile">×</button>
+        </div>
+        <div class="solver-deck-picker" id="solverDeckPicker"></div>
+        <div class="solver-dialog-actions">
+          <button class="secondary-action" id="solverClearDiscardButton" type="button">Clear discard pile</button>
+        </div>
+      </dialog>
+
+      <dialog class="solver-discard-dialog" id="solverCardDialog" aria-labelledby="solverCardDialogTitle">
+        <div class="dialog-header">
+          <h2 id="solverCardDialogTitle">Choose card</h2>
+          <button class="icon-button" id="solverCloseCardButton" type="button" aria-label="Close card chooser">×</button>
+        </div>
+        <div class="solver-deck-picker" id="solverCardPicker"></div>
+        <div class="solver-dialog-actions">
+          <button class="secondary-action" id="solverClearCardButton" type="button">Set unknown</button>
+        </div>
+      </dialog>
+    </main>
+
+    <script src="engine.js"></script>
+    <script src="game.js"></script>
+  </body>
+</html>
