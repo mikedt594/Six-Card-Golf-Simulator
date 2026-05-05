@@ -53,6 +53,7 @@ let solverDiscardPile = [];
 let solverActiveCardSlot = null;
 let learnedCpuBaseline = null;
 let gtoWorker = null;
+let gtoRunId = 0;
 
 const playersEl = document.querySelector("#players");
 const scoreboardEl = document.querySelector("#scoreboard");
@@ -1530,6 +1531,7 @@ function solverOptionHtml(selectedCode, allowUnknown = true) {
 }
 
 function setSolverPlayerCount(count) {
+  cancelGtoTreeSolve("Player count changed. Run the solver when ready.");
   solverPlayerCount = count;
   solverCurrentPlayer = 0;
   renderSolver();
@@ -1837,6 +1839,16 @@ function renderSolverEngineResults(results) {
   `;
 }
 
+function cancelGtoTreeSolve(message = "") {
+  gtoRunId += 1;
+  if (gtoWorker) {
+    gtoWorker.terminate();
+    gtoWorker = null;
+  }
+  gtoRunButtonEl.disabled = false;
+  if (message) solverOutputEl.textContent = message;
+}
+
 function runGtoTreeSolve() {
   const duplicates = solverDuplicateWarnings();
   if (duplicates.length > 0) {
@@ -1849,14 +1861,20 @@ function runGtoTreeSolve() {
   }
   const samples = Number(gtoSamplesEl.value) || 1000;
   const depth = Number(gtoDepthEl.value) || 6;
+  const runId = gtoRunId + 1;
+  gtoRunId = runId;
   solverOutputEl.innerHTML = `<div class="equity-note">Starting background GTO tree solve...</div>`;
   gtoRunButtonEl.disabled = true;
 
-  if (gtoWorker) gtoWorker.terminate();
+  if (gtoWorker) {
+    gtoWorker.terminate();
+    gtoWorker = null;
+  }
 
   try {
     gtoWorker = createGtoWorker();
     gtoWorker.onmessage = (event) => {
+      if (runId !== gtoRunId) return;
       const { type, completed, message, results } = event.data;
       if (type === "progress") {
         renderGtoTreeResults(results, { completed, samples, depth, running: true });
@@ -1870,10 +1888,14 @@ function runGtoTreeSolve() {
       if (type === "error") {
         solverOutputEl.innerHTML = `<p class="solver-warning">${message}</p>`;
         gtoRunButtonEl.disabled = false;
+        if (gtoWorker) {
+          gtoWorker.terminate();
+          gtoWorker = null;
+        }
       }
     };
     gtoWorker.onerror = () => {
-      runGtoTreeFallback(depth, samples);
+      if (runId === gtoRunId) runGtoTreeFallback(depth, samples, runId);
     };
     gtoWorker.postMessage({
       state: solverEngineState(),
@@ -1882,7 +1904,7 @@ function runGtoTreeSolve() {
       batchSize: Math.min(100, Math.max(25, Math.floor(samples / 10))),
     });
   } catch (error) {
-    runGtoTreeFallback(depth, samples);
+    runGtoTreeFallback(depth, samples, runId);
   }
 }
 
@@ -1961,7 +1983,7 @@ function createGtoWorker() {
   return new Worker(URL.createObjectURL(blob));
 }
 
-function runGtoTreeFallback(depth, samples) {
+function runGtoTreeFallback(depth, samples, runId = gtoRunId) {
   if (gtoWorker) {
     gtoWorker.terminate();
     gtoWorker = null;
@@ -1969,9 +1991,11 @@ function runGtoTreeFallback(depth, samples) {
   const fallbackSamples = Math.min(samples, 700);
   solverOutputEl.innerHTML = `<div class="equity-note">Background worker unavailable. Showing the stronger rollout solver instead of a noisy small tree.</div>`;
   setTimeout(() => {
+    if (runId !== gtoRunId) return;
     const results = window.GolfEngine.evaluateActions(solverEngineState(), {
       samples: fallbackSamples,
     });
+    if (runId !== gtoRunId) return;
     renderGtoTreeResults(results, {
       completed: fallbackSamples,
       samples: fallbackSamples,
@@ -2079,6 +2103,7 @@ function explainSolverBestMove(best, results) {
 }
 
 function clearSolverSpot() {
+  cancelGtoTreeSolve();
   solverHands = createEmptySolverHands();
   solverDiscardPile = [];
   solverCurrentPlayer = 0;
@@ -2160,6 +2185,7 @@ function saveSolverSpot() {
 }
 
 function applySolverSpot(spot) {
+  cancelGtoTreeSolve();
   solverPlayerCount = Math.min(4, Math.max(2, Number(spot.playerCount) || 2));
   solverCurrentPlayer = Math.min(solverPlayerCount - 1, Math.max(0, Number(spot.currentPlayer) || 0));
   solverHands = createEmptySolverHands();
@@ -2193,6 +2219,7 @@ function deleteSolverSpot() {
 }
 
 function randomSolverSpot() {
+  cancelGtoTreeSolve();
   const deck = shuffle(solverDeckOptions().filter((option) => option.code).map((option) => option.code));
   solverHands = createEmptySolverHands();
   solverDiscardPile = [];
@@ -2319,6 +2346,7 @@ function renderSolverDeckPicker() {
 
 function toggleSolverDiscardCard(code) {
   if (solverHandUsedCodes().has(code)) return;
+  cancelGtoTreeSolve("Spot changed. Run the solver when ready.");
   const index = solverDiscardPile.indexOf(code);
   if (index === -1) {
     solverDiscardPile.push(code);
@@ -2373,6 +2401,7 @@ function renderSolverCardPicker() {
 function setSolverSlotCard(code) {
   if (!solverActiveCardSlot) return;
   if (solverKnownCodesExceptActiveSlot().has(code)) return;
+  cancelGtoTreeSolve("Spot changed. Run the solver when ready.");
   solverHands[solverActiveCardSlot.playerIndex][solverActiveCardSlot.slotIndex].code = code;
   closeSolverCardPicker();
   renderSolverPlayers();
@@ -2381,6 +2410,7 @@ function setSolverSlotCard(code) {
 
 function clearSolverSlotCard() {
   if (!solverActiveCardSlot) return;
+  cancelGtoTreeSolve("Spot changed. Run the solver when ready.");
   solverHands[solverActiveCardSlot.playerIndex][solverActiveCardSlot.slotIndex].code = "";
   closeSolverCardPicker();
   renderSolverPlayers();
@@ -2620,12 +2650,14 @@ solverPlayerCountControlsEl.addEventListener("click", (event) => {
   setSolverPlayerCount(Number(button.dataset.count));
 });
 solverCurrentPlayerEl.addEventListener("change", () => {
+  cancelGtoTreeSolve("Current player changed. Run the solver when ready.");
   solverCurrentPlayer = 0;
   renderSolverPlayers();
 });
 solverOpenDiscardButtonEl.addEventListener("click", openSolverDiscardPicker);
 solverCloseDiscardButtonEl.addEventListener("click", closeSolverDiscardPicker);
 solverClearDiscardButtonEl.addEventListener("click", () => {
+  cancelGtoTreeSolve("Spot changed. Run the solver when ready.");
   solverDiscardPile = [];
   renderSolverDiscardList();
   renderSolverDeckPicker();
@@ -2645,6 +2677,7 @@ solverClearCardButtonEl.addEventListener("click", clearSolverSlotCard);
 solverDiscardListEl.addEventListener("click", (event) => {
   const removeButton = event.target.closest("button[data-remove]");
   if (removeButton) {
+    cancelGtoTreeSolve("Spot changed. Run the solver when ready.");
     solverDiscardPile.splice(Number(removeButton.dataset.index), 1);
     renderSolverControls();
     renderSolverDeckPicker();
